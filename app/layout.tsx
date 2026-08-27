@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import './globals.css';
+import './base.css';
 
 export const metadata: Metadata = {
   title: '단체 게임 퀴즈',

@@ -13,6 +13,7 @@ import { Menu } from './Menu';
 import { StatsBody } from './StatsBody';
 import { WinPicker } from './WinPicker';
 import { YouTubeBar, type YouTubeHandle } from './YouTubeBar';
+import { useOffline } from './useOffline';
 import {
   CheerBody,
   CoverBody,
@@ -33,9 +34,14 @@ interface Props {
   pack: Pack;
   /** 문제를 고칠 수 있는 사람이면 그 주소. 보기 권한만 있으면 비워 둡니다 */
   editHref?: string | null;
+  /** 보기 권한만 있는 사람에게 '내 문제집으로 복사' 를 내줍니다 (이 문제집의 보기 링크 값) */
+  copyFrom?: string | null;
 }
 
-export function Deck({ pack, editHref = null }: Props) {
+export function Deck({ pack, editHref = null, copyFrom = null }: Props) {
+  // 인터넷이 끊겨도 이 화면은 다시 열립니다
+  useOffline();
+
   const built = useMemo(() => buildSlides(pack), [pack]);
   const { slides, rounds, roundStart, tocAt, statsAt, roundOfKey } = built;
   const total = slides.length;
@@ -287,6 +293,51 @@ export function Deck({ pack, editHref = null }: Props) {
     if (pack.title) document.title = pack.title;
   }, [pack.title]);
 
+  /* 퀴즈를 보는 동안에만 바탕이 안 밀리게 합니다.
+     목록 같은 보통 화면으로 넘어가면 다시 스크롤됩니다 */
+  useEffect(() => {
+    document.body.classList.add('deck');
+    return () => document.body.classList.remove('deck');
+  }, []);
+
+  /* ── 내 문제집으로 복사 (보기 권한만 있는 사람) ── */
+  const [copying, setCopying] = useState(false);
+  const copyToMine = useCallback(async () => {
+    if (!copyFrom || copying) return;
+    setCopying(true);
+    try {
+      const res = await fetch('/api/packs/copy', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ from: copyFrom }),
+      });
+      if (res.status === 401) {
+        // 로그인하고 돌아오면 바로 이어서 복사합니다
+        window.location.href = '/api/auth/kakao?next=' + encodeURIComponent(window.location.pathname + '?copy=1');
+        return;
+      }
+      const out = (await res.json()) as { id?: string; error?: string };
+      if (!res.ok || !out.id) {
+        toast(out.error || '복사하지 못했습니다');
+        setCopying(false);
+        return;
+      }
+      window.location.href = '/edit/' + out.id;
+    } catch {
+      toast('복사하지 못했습니다');
+      setCopying(false);
+    }
+  }, [copyFrom, copying, toast]);
+
+  /* 로그인하고 돌아왔으면 이어서 복사합니다 */
+  useEffect(() => {
+    if (!copyFrom) return;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('copy') === '1') void copyToMine();
+    // 한 번만 시도합니다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copyFrom]);
+
   /* ── 지금 화면의 노래 ───────────────────────────── */
   const here = slides[cur];
   const songKey = here && here.type === 'q' && here.item.yt ? scoreKeyOf(here) : null;
@@ -403,6 +454,13 @@ export function Deck({ pack, editHref = null }: Props) {
           <a id="btn-admin" href={editHref}>
             ✏️ 문제 고치기
           </a>
+        </div>
+      ) : copyFrom ? (
+        <div id="tools">
+          {/* 보기 권한만 있는 사람은 못 고칩니다. 대신 자기 것으로 베껴 갈 수 있습니다 */}
+          <button id="btn-admin" type="button" onClick={copyToMine} disabled={copying}>
+            {copying ? '복사하는 중…' : '📄 내 문제집으로 복사'}
+          </button>
         </div>
       ) : null}
 

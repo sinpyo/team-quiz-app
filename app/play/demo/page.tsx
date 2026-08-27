@@ -1,5 +1,6 @@
 import { Deck } from '@/components/deck/Deck';
 import { defaultPack } from '@/lib/defaultPack';
+import '../../globals.css';
 
 export const metadata = { title: '단체 게임 퀴즈' };
 

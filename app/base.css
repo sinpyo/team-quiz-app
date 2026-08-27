@@ -1,0 +1,30 @@
+/* 모든 화면이 함께 쓰는 색과 글꼴.
+   퀴즈 화면만 쓰는 것은 globals.css 에 있습니다. */
+
+:root {
+  --ink: #14101c;
+  --ink-2: #1d1730;
+  --haze: #2c2344;
+  --paper: #f5eff8;
+  --mute: #9a8db6;
+  --accent: #ff5f8d;
+  --taegeuk-red: #ff4d5e;
+  --taegeuk-blue: #4d8cff;
+  --sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+          'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Roboto Mono', monospace;
+  --emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  --dock: 1.1rem;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  word-break: keep-all;          /* 한글은 띄어쓰기에서만 줄바꿈 */
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}

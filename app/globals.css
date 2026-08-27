@@ -1,36 +1,12 @@
 /* 퀴즈 화면 스타일.
    team-quiz 의 index.html <style> 을 그대로 옮긴 것입니다.
+   색과 글꼴은 base.css 에 있습니다.
    인쇄 규칙(맨 아래 @media print)은 150장을 A4 가로로 뽑는 데 쓰이므로
    손대지 마세요. */
 
-:root {
-  --ink: #14101c;
-  --ink-2: #1d1730;
-  --haze: #2c2344;
-  --paper: #f5eff8;
-  --mute: #9a8db6;
-  --accent: #ff5f8d;
-  --taegeuk-red: #ff4d5e;
-  --taegeuk-blue: #4d8cff;
-  --sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
-          'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
-  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Roboto Mono', monospace;
-  --emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
-  --dock: 1.1rem;
-}
-
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
-
-body {
-  background: var(--ink);
-  color: var(--paper);
-  font-family: var(--sans);
-  word-break: keep-all;          /* 한글은 띄어쓰기에서만 줄바꿈 */
-  overflow-wrap: break-word;
-  overflow: hidden;
-  -webkit-font-smoothing: antialiased;
-}
+/* 퀴즈 화면이 켜져 있는 동안에만 바탕이 안 밀립니다.
+   목록·공유 같은 보통 화면은 그대로 스크롤돼야 하므로 body 전체에 걸지 않습니다 */
+body.deck { overflow: hidden; }
 
 /* ── 무대 ────────────────────────────────────────── */
 #deck { position: relative; height: 100dvh; width: 100%; }
@@ -487,12 +463,13 @@ body.yt-on { --dock: 4rem; }
   display: flex; gap: .35rem; opacity: .3; transition: opacity .18s ease;
 }
 #tools:hover, #tools:focus-within { opacity: 1; }
-#tools a {
+#tools a, #tools button {
   padding: .38em .8em; border: 1px solid var(--haze); border-radius: 8px;
   background: var(--ink-2); color: var(--mute); text-decoration: none;
   font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer;
 }
-#tools a:hover { color: var(--paper); }
+#tools a:hover, #tools button:hover { color: var(--paper); }
+#tools button:disabled { opacity: .6; cursor: default; }
 
 #toast {
   position: fixed; left: 50%; bottom: calc(var(--dock) + 1rem); transform: translateX(-50%);
@@ -532,7 +509,7 @@ body.yt-on { --dock: 4rem; }
 /* ── 인쇄 / PDF ──────────────────────────────────── */
 @page { size: A4 landscape; margin: 0; }
 @media print {
-  html, body { height: auto; overflow: visible; background: #14101c; }
+  html, body, body.deck { height: auto; overflow: visible; background: #14101c; }
   #deck { height: auto; }
   #menu, #tools, #dock, #toast, #yt-host { display: none !important; }
   /* 눌러야 뜻이 있는 단추라 종이에서는 뺍니다 */
