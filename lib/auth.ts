@@ -63,12 +63,17 @@ export async function currentUser(): Promise<UserRow | null> {
   return rows[0] ?? null;
 }
 
-/** 카카오에서 받은 사람을 우리 쪽에 없으면 넣고, 있으면 이름·사진만 새로 고칩니다 */
-export async function upsertUser(kakaoId: string, name: string, avatarUrl: string | null): Promise<UserRow> {
+/** 구글에서 받은 사람을 우리 쪽에 없으면 넣고, 있으면 이름·사진·메일만 새로 고칩니다 */
+export async function upsertUser(
+  loginId: string,
+  name: string,
+  avatarUrl: string | null,
+  email: string | null = null,
+): Promise<UserRow> {
   const [row] = await db()
     .insert(schema.users)
-    .values({ kakaoId, name, avatarUrl })
-    .onConflictDoUpdate({ target: schema.users.kakaoId, set: { name, avatarUrl } })
+    .values({ loginId, name, avatarUrl, email })
+    .onConflictDoUpdate({ target: schema.users.loginId, set: { name, avatarUrl, email } })
     .returning();
   return row;
 }

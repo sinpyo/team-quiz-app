@@ -110,7 +110,7 @@ export function SharePanel({ packId, title, viewUrl }: { packId: string; title: 
       <div className="card">
         <h2>편집 초대</h2>
         <p className="lede">
-          같이 문제를 만들 사람에게만 주세요. 이 링크를 열고 카카오로 들어오면 그때부터
+          같이 문제를 만들 사람에게만 주세요. 이 링크를 열고 구글로 들어오면 그때부터
           <b> 이 문제집을 고칠 수 있습니다.</b>
         </p>
 

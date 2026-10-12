@@ -1,13 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { buildSlides, hasAnswer } from '@/lib/buildSlides';
 import { newItemId } from '@/lib/ids';
+import { findSlide, type PreviewTarget } from '@/lib/previewTarget';
+import type { PackKind } from '@/lib/schema';
 import { LS, drop } from '@/lib/storage';
 import type { Pack, Question } from '@/lib/types';
 
+import { saveAsTemplate } from '../saveAsTemplate';
+import type { Zone } from './blocks';
 import { CoverPane, RoundPane } from './Panes';
-import { blankRound, changeKind, kindOf, readField, setPath, type KindValue } from './paths';
+import { setPath } from './paths';
+import { Picker } from './Picker';
+import { newRound, questionFrom, sameShape, type Preset } from './presets';
+import { Preview } from './Preview';
 
 type Where = 'cover' | number;
 type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict';
@@ -20,11 +28,16 @@ interface Props {
   viewToken: string;
   /** 내가 주인이면 공유 설정으로 갈 수 있습니다 */
   mine: boolean;
+  /** 문제집인지 템플릿인지 — 템플릿이면 공유 대신 '템플릿으로 돌아가기' 가 붙습니다 */
+  kind: PackKind;
 }
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mine }: Props) {
+const COVER_LABEL = { cover: '표지', cheer: '표지 다음 장', stop: '규칙 장', finale: '마지막 장' } as const;
+
+export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mine, kind }: Props) {
   const [pack, setPackState] = useState<Pack>(initial);
   const packRef = useRef<Pack>(initial);
 
@@ -32,6 +45,12 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [state, setState] = useState<SaveState>('clean');
   const [toastMsg, setToastMsg] = useState('');
+  const [picker, setPicker] = useState<null | 'round' | 'question'>(null);
+
+  /* 미리보기가 보여줄 장. 칸을 만질 때마다 따라갑니다 */
+  const [focus, setFocus] = useState<PreviewTarget>({ type: 'cover' });
+  const [reveal, setReveal] = useState(false);
+  const focusOn = useCallback((t: PreviewTarget) => setFocus((prev) => (same(prev, t) ? prev : t)), []);
 
   const stamp = useRef(initialUpdatedAt);
   const undoStack = useRef<string[]>([]);
@@ -41,6 +60,10 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 방금 넣은 문제 — 그리고 나면 그 자리로 화면을 옮깁니다 */
+  const scrollTo = useRef<string | null>(null);
+  /** 라운드를 바꾸면서 미리보기를 라운드 표지가 아닌 다른 장으로 보내고 싶을 때 */
+  const pendingFocus = useRef<PreviewTarget | null>(null);
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -83,6 +106,14 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
     saveTimer.current = setTimeout(() => void save(), 900);
   }, [save]);
 
+  /** 기다리는 저장이 있으면 지금 바로 보냅니다 */
+  const flush = useCallback(async () => {
+    if (!saveTimer.current) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    await save();
+  }, [save]);
+
   /* ── 고치기 ─────────────────────────────────────── */
   const pushUndo = useCallback(() => {
     undoStack.current.push(JSON.stringify(packRef.current));
@@ -92,7 +123,10 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
 
   const apply = useCallback(
     (next: Pack, snapshot = true) => {
-      if (snapshot) pushUndo();
+      if (snapshot) {
+        pushUndo();
+        typingPath.current = null;
+      }
       packRef.current = next;
       setPackState(next);
       scheduleSave();
@@ -100,9 +134,9 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
     [pushUndo, scheduleSave],
   );
 
-  /** 칸에 글자를 칠 때. 되돌리기는 칸마다 한 번만 담습니다 */
-  const onSet = useCallback(
-    (path: string, raw: string) => {
+  /** 글자를 칠 때. 되돌리기는 칸마다 한 번만 담습니다 */
+  const typed = useCallback(
+    (path: string, next: Pack) => {
       if (typingPath.current !== path) {
         pushUndo();
         typingPath.current = path;
@@ -111,10 +145,21 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
       typingTimer.current = setTimeout(() => {
         typingPath.current = null;
       }, 900);
-
-      apply(setPath(packRef.current, path, readField(path, raw)), false);
+      apply(next, false);
     },
     [apply, pushUndo],
+  );
+
+  /** 표지 · 라운드 칸 — 비우면 그 칸이 없어집니다 */
+  const onSet = useCallback(
+    (path: string, raw: string) => typed(path, setPath(packRef.current, path, raw)),
+    [typed],
+  );
+
+  /** 문제 블록 칸 — 비워도 블록은 남아 있습니다 */
+  const onPut = useCallback(
+    (path: string, value: unknown) => typed(path, setPath(packRef.current, path, value, true)),
+    [typed],
   );
 
   const undo = useCallback(() => {
@@ -124,6 +169,7 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
     const next = JSON.parse(prev) as Pack;
     packRef.current = next;
     setPackState(next);
+    typingPath.current = null;
     scheduleSave();
     toast('되돌렸습니다');
   }, [scheduleSave, toast]);
@@ -148,14 +194,41 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
     return () => window.removeEventListener('beforeunload', leave);
   }, [state]);
 
+  /* 왼쪽에서 고른 곳으로 미리보기도 옮깁니다 */
+  useEffect(() => {
+    const t = pendingFocus.current;
+    pendingFocus.current = null;
+    focusOn(t ?? (sel === 'cover' ? { type: 'cover' } : { type: 'round', ri: sel }));
+    setReveal(false);
+  }, [sel, focusOn]);
+
+  /* 방금 넣은 문제로 화면을 옮기고 첫 칸에 커서를 둡니다 */
+  useEffect(() => {
+    const id = scrollTo.current;
+    if (!id) return;
+    scrollTo.current = null;
+    const el = document.querySelector<HTMLElement>(`[data-qid="${id}"]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el?.querySelector<HTMLElement>('.qbody input, .qbody textarea')?.focus({ preventScroll: true });
+  }, [pack]);
+
   /* ── 라운드 ────────────────────────────────────── */
   const rounds = pack.rounds || [];
   const ri = typeof sel === 'number' ? sel : -1;
 
-  const addRound = () => {
+  const addRound = (p: Preset | null) => {
     const next = clone(packRef.current);
-    next.rounds = [...(next.rounds || []), blankRound((next.rounds || []).length + 1)];
+    const r = newRound(next.rounds || [], p);
+    next.rounds = [...(next.rounds || []), r];
+    const first = r.q?.[0];
+    if (first?.id) {
+      // 문제가 있는 라운드면 미리보기를 라운드 표지 대신 첫 문제로 보냅니다
+      setOpen((s) => new Set(s).add(first.id!));
+      scrollTo.current = first.id;
+      pendingFocus.current = { type: 'q', ri: next.rounds.length - 1, qid: first.id };
+    }
     apply(next);
+    setPicker(null);
     setSel(next.rounds.length - 1);
   };
 
@@ -192,7 +265,27 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
     apply(next);
   };
 
-  const addQ = () => withQs((qs) => [...qs, { id: newItemId(), k: 'cho', g: '' }]);
+  /** 새 문제를 넣고, 펼치고, 미리보기도 그 문제로 */
+  const pushQ = (it: Question) => {
+    withQs((qs) => [...qs, it]);
+    setOpen((s) => new Set(s).add(it.id!));
+    scrollTo.current = it.id!;
+    focusOn({ type: 'q', ri, qid: it.id! });
+    setReveal(false);
+  };
+
+  const addSame = () => pushQ(sameShape(rounds[ri]?.q || []));
+  const addPreset = (p?: Preset) => {
+    if (!p) {
+      setPicker('question');
+      return;
+    }
+    setPicker(null);
+    pushQ(questionFrom(p));
+  };
+
+  const patchQ = (i: number, fn: (it: Question) => Question) =>
+    withQs((qs) => qs.map((it, k) => (k === i ? fn(it) : it)));
   const moveQ = (i: number, dir: number) =>
     withQs((qs) => {
       const to = i + dir;
@@ -206,15 +299,14 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
       const copy = { ...clone(qs[i]), id: newItemId() };
       return [...qs.slice(0, i + 1), copy, ...qs.slice(i + 1)];
     });
-  const delQ = (i: number) =>
-    withQs((qs) => {
-      const it = qs[i];
-      const label = it.g || it.q || it.a || '이 문제';
-      if (!window.confirm(`"${label}" 을(를) 지울까요?`)) return qs;
-      return qs.filter((_, k) => k !== i);
-    });
-  const setKind = (i: number, v: KindValue) =>
-    withQs((qs) => qs.map((it, k) => (k === i ? changeKind(it, v) : it)));
+  const delQ = (i: number) => {
+    const it = rounds[ri]?.q?.[i];
+    if (!it) return;
+    const label = it.g || it.q || it.a || '이 문제';
+    if (!window.confirm(`"${label}" 을(를) 지울까요?`)) return;
+    withQs((qs) => qs.filter((_, k) => k !== i));
+    if (focus.type === 'q' && focus.qid === it.id) focusOn({ type: 'round', ri });
+  };
 
   const toggleQ = (id: string) =>
     setOpen((s) => {
@@ -223,6 +315,15 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
       else n.add(id);
       return n;
     });
+
+  const onFocusQ = useCallback(
+    (qid: string, zone: Zone) => {
+      if (ri < 0) return;
+      focusOn({ type: 'q', ri, qid });
+      setReveal(zone === 'answer');
+    },
+    [ri, focusOn],
+  );
 
   /* ── 앞뒤 장 ───────────────────────────────────── */
   const addStep = () => {
@@ -299,6 +400,40 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
     toast('점수와 팀 이름을 지웠습니다');
   };
 
+  const [savingTpl, setSavingTpl] = useState(false);
+  const toTemplate = async () => {
+    setSavingTpl(true);
+    await flush(); // 지금 화면의 내용이 템플릿에 들어가도록 먼저 저장합니다
+    const out = await saveAsTemplate(packId, packRef.current.title || title);
+    setSavingTpl(false);
+    if (out.error) toast(out.error);
+    if (out.id) toast('템플릿으로 저장했습니다 — 처음 화면의 템플릿 목록에 있습니다');
+  };
+
+  /* ── 미리보기 ──────────────────────────────────── */
+  const built = useMemo(() => buildSlides(pack), [pack]);
+  const at = findSlide(built, focus);
+  const atSlide = at >= 0 ? built.slides[at] : undefined;
+  const canReveal = hasAnswer(atSlide);
+  const noRevealHint = (() => {
+    if (atSlide?.type !== 'q') return '정답 상자가 없는 장입니다';
+    const it = atSlide.item;
+    // 정답 블록은 있는데 아직 비어 있으면, 적는 순간 정답 화면이 생깁니다
+    if (it.a !== undefined || it.note !== undefined || it.list !== undefined || it.full !== undefined) {
+      return '정답을 적으면 정답 공개 화면도 볼 수 있습니다';
+    }
+    return '정답 없이 → 한 번에 넘어가는 장입니다';
+  })();
+  const pvLabel = (() => {
+    if (focus.type === 'round') return `${focus.ri + 1}라운드 표지`;
+    if (focus.type === 'q') {
+      const qi = (rounds[focus.ri]?.q || []).findIndex((q) => q.id === focus.qid);
+      return `${focus.ri + 1}라운드 · ${atSlide?.type === 'q' && atSlide.item.tag ? atSlide.item.tag : 'Q' + (qi + 1)}`;
+    }
+    return COVER_LABEL[focus.type];
+  })();
+  const playHref = at < 0 ? null : '/play/' + viewToken + (at > 0 ? '#' + at : '');
+
   /* ── 화면 ──────────────────────────────────────── */
   const label: Record<SaveState, string> = {
     clean: '고치면 저절로 저장됩니다',
@@ -311,13 +446,18 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
   const where =
     sel === 'cover'
       ? '표지와 앞뒤 장의 글을 고칩니다'
-      : `${ri + 1}번째 라운드 · 문제 ${(rounds[ri]?.q || []).length}개`;
+      : `${ri + 1}번째 라운드 · ${(rounds[ri]?.q || []).length ? `문제 ${(rounds[ri]?.q || []).length}개` : '게임 한 장'}`;
+  const isTpl = kind === 'template';
 
   return (
     <div className="ed">
       <header className="top">
+        <a className="btn sm quiet" href={isTpl ? '/templates/' + packId : '/'}>
+          ← {isTpl ? '템플릿' : '처음으로'}
+        </a>
         <h1>
-          문제 고치기
+          {isTpl ? <span className="tpl-tag">템플릿</span> : null}
+          {pack.title || title}
           <small>
             {where} · <b style={{ color: state === 'error' || state === 'conflict' ? '#ff6b81' : 'inherit' }}>{label[state]}</b>
           </small>
@@ -325,35 +465,44 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
         <button className="btn sm" type="button" title="되돌리기 (Ctrl+Z)" onClick={undo} disabled={!canUndo}>
           ↶ 되돌리기
         </button>
-        <button className="btn" type="button" onClick={exportPack}>
-          ⬇ 문제집 내보내기
-        </button>
-        <button className="btn" type="button" onClick={() => fileRef.current?.click()}>
-          ⬆ 불러오기
-        </button>
-        <button className="btn danger" type="button" onClick={wipeLocal}>
-          점수·팀 지우기
-        </button>
-        {mine ? (
+        <details className="more-menu">
+          <summary className="btn" title="더 보기">
+            ⋯
+          </summary>
+          <div className="menu-pop">
+            <button type="button" onClick={exportPack}>
+              ⬇ 파일로 내보내기 (.json)
+            </button>
+            <button type="button" onClick={() => fileRef.current?.click()}>
+              ⬆ 파일에서 불러오기
+            </button>
+            <button type="button" className="danger" onClick={wipeLocal}>
+              이 브라우저의 점수 · 팀 이름 지우기
+            </button>
+          </div>
+        </details>
+        {!isTpl ? (
+          <button className="btn" type="button" onClick={toTemplate} disabled={savingTpl}>
+            📑 템플릿으로 저장
+          </button>
+        ) : null}
+        {!isTpl && mine ? (
           <a className="btn" href={'/share/' + packId}>
             🔗 공유
           </a>
         ) : null}
-        <a className="btn" href="/">
-          내 문제집
-        </a>
         <a className="btn go" href={'/play/' + viewToken} target="_blank" rel="noopener">
           ▶ 퀴즈 열기
         </a>
       </header>
 
       {state === 'conflict' ? (
-        <p style={{ margin: '.6rem 1rem 0', padding: '.7em .9em', borderRadius: 10, background: '#3a1a25', color: '#ffc9c9', fontSize: '.86rem' }}>
-          다른 사람이 방금 이 문제집을 고쳤습니다. 덮어쓰지 않으려고 저장을 멈췄습니다 —{' '}
+        <p className="conflict">
+          다른 사람이 방금 이 {isTpl ? '템플릿' : '문제집'}을 고쳤습니다. 덮어쓰지 않으려고 저장을 멈췄습니다 —{' '}
           <button className="btn sm" type="button" onClick={() => window.location.reload()}>
             새로고침
           </button>{' '}
-          해서 최신 내용을 받아주세요. (지금 화면의 내용은 <b>⬇ 문제집 내보내기</b> 로 먼저 챙겨두실 수 있습니다.)
+          해서 최신 내용을 받아주세요. (지금 화면의 내용은 <b>⋯ → 파일로 내보내기</b> 로 먼저 챙겨두실 수 있습니다.)
         </p>
       ) : null}
 
@@ -383,11 +532,11 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
                 <b>
                   {i + 1}. {r.t}
                 </b>
-                <em>{(r.q || []).length}</em>
+                {(r.q || []).length ? <em>{(r.q || []).length}</em> : <em className="solo">한 장</em>}
               </button>
             ))}
           </div>
-          <button className="btn sm" type="button" onClick={addRound}>
+          <button className="btn sm add-round" type="button" onClick={() => setPicker('round')}>
             + 라운드 추가
           </button>
         </aside>
@@ -397,6 +546,7 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
             <CoverPane
               pack={pack}
               onSet={onSet}
+              onFocusTarget={focusOn}
               onAddStep={addStep}
               onDelStep={delStep}
               onHot={setHot}
@@ -408,19 +558,44 @@ export function Editor({ packId, title, initial, initialUpdatedAt, viewToken, mi
               pack={pack}
               ri={ri}
               onSet={onSet}
+              onFocusTarget={focusOn}
               open={open}
               onToggleQ={toggleQ}
-              onKind={setKind}
+              onPut={onPut}
+              onPatchQ={patchQ}
               onMoveQ={moveQ}
               onDupQ={dupQ}
               onDelQ={delQ}
-              onAddQ={addQ}
+              onAddSame={addSame}
+              onAddPreset={addPreset}
               onMoveRound={moveRound}
               onDelRound={delRound}
+              onFocusQ={onFocusQ}
             />
           )}
         </section>
+
+        <div className="pvcol">
+          <Preview
+            pack={pack}
+            target={focus}
+            reveal={canReveal && reveal}
+            canReveal={canReveal}
+            noRevealHint={noRevealHint}
+            label={pvLabel}
+            onReveal={setReveal}
+            playHref={playHref}
+          />
+        </div>
       </main>
+
+      {picker ? (
+        <Picker
+          mode={picker}
+          onPick={(p) => (picker === 'round' ? addRound(p) : p && addPreset(p))}
+          onClose={() => setPicker(null)}
+        />
+      ) : null}
 
       <input
         ref={fileRef}

@@ -1,19 +1,19 @@
-import { desc, eq, inArray, or } from 'drizzle-orm';
-
-import { PackList, type PackRowView } from '@/components/PackList';
+import { GoogleButton } from '@/components/GoogleButton';
+import { PackList } from '@/components/PackList';
+import { TemplateGrid } from '@/components/TemplateGrid';
 import { currentUser } from '@/lib/auth';
-import { db, schema } from '@/lib/db';
-import { fakeLoginOn, kakaoReady } from '@/lib/site';
+import { myLibrary } from '@/lib/library';
+import { fakeLoginOn, googleReady } from '@/lib/site';
 import './ui.css';
 
 export const dynamic = 'force-dynamic';
 
 const REASON: Record<string, string> = {
   cancelled: '로그인을 취소하셨습니다.',
-  'kakao-not-set': '카카오 로그인이 아직 준비되지 않았습니다.',
+  'google-not-set': '구글 로그인이 아직 준비되지 않았습니다.',
   'bad-state': '로그인이 올바르게 이어지지 않았습니다. 다시 해주세요.',
-  'token-failed': '카카오와 이야기하지 못했습니다. 다시 해주세요.',
-  'me-failed': '카카오에서 정보를 받지 못했습니다. 다시 해주세요.',
+  'token-failed': '구글과 이야기하지 못했습니다. 다시 해주세요.',
+  'bad-token': '구글에서 받은 정보를 확인하지 못했습니다. 다시 해주세요.',
   'no-code': '로그인이 끝나지 않았습니다. 다시 해주세요.',
   'login-failed': '로그인하지 못했습니다. 다시 해주세요.',
 };
@@ -31,15 +31,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
             <h1>단체 게임 퀴즈</h1>
             <p>
               친구들끼리 모여서 하는 팀 대항 퀴즈입니다. 화면에 띄워놓고 키보드로 넘기면 됩니다.
-              16개 라운드, 127문제가 들어 있습니다.
+              템플릿을 골라 내 문제집을 만들고, 원하는 대로 고쳐 쓰세요.
             </p>
             {err && REASON[err] ? <p className="warn">{REASON[err]}</p> : null}
             <div className="row">
-              {kakaoReady() ? (
-                <a className="btn kakao" href="/api/auth/kakao">
-                  카카오로 시작하기
-                </a>
-              ) : null}
+              {googleReady() ? <GoogleButton /> : null}
               <a className="btn" href="/play/demo">
                 ▶ 로그인 없이 해보기
               </a>
@@ -59,42 +55,47 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     );
   }
 
-  const invitedRows = await db()
-    .select({ packId: schema.packEditors.packId })
-    .from(schema.packEditors)
-    .where(eq(schema.packEditors.userId, me.id));
-  const invited = invitedRows.map((r) => r.packId);
-
-  const rows = await db()
-    .select({
-      id: schema.packs.id,
-      title: schema.packs.title,
-      ownerId: schema.packs.ownerId,
-      viewToken: schema.packs.viewToken,
-      updatedAt: schema.packs.updatedAt,
-    })
-    .from(schema.packs)
-    .where(
-      invited.length
-        ? or(eq(schema.packs.ownerId, me.id), inArray(schema.packs.id, invited))
-        : eq(schema.packs.ownerId, me.id),
-    )
-    .orderBy(desc(schema.packs.updatedAt));
-
-  const packs: PackRowView[] = rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    viewToken: r.viewToken,
-    updatedAt: r.updatedAt.toISOString(),
-    mine: r.ownerId === me.id,
-  }));
+  const all = await myLibrary(me.id);
+  const templates = all.filter((r) => r.kind === 'template');
+  const packs = all.filter((r) => r.kind === 'pack');
 
   return (
     <main className="page">
       <div className="wrap">
-        <PackList packs={packs} />
+        <div className="top">
+          <h1>{me.name} 님, 무엇을 할까요?</h1>
+          <div className="row who">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {me.avatarUrl ? <img src={me.avatarUrl} alt="" referrerPolicy="no-referrer" /> : null}
+            <form action="/api/auth/logout" method="post">
+              <button type="submit" className="btn quiet sm">
+                나가기
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <section className="sec">
+          <div className="sec-head">
+            <h2>템플릿으로 시작하기</h2>
+            <p>골라서 내용을 확인하고, 마음에 들면 내 문제집으로 만들어 고치세요.</p>
+          </div>
+          <TemplateGrid mine={templates} />
+        </section>
+
+        <section className="sec">
+          <div className="sec-head">
+            <h2>내 문제집</h2>
+            <p>진행할 때 쓰는 문제집입니다. 잘 만든 문제집은 템플릿으로 저장해 두면 다음 모임에 다시 꺼내 쓸 수 있습니다.</p>
+          </div>
+          <PackList packs={packs} />
+        </section>
+
         <p className="note">
-          {me.name} 님으로 들어와 있습니다 · <a className="back" href="/play/demo">기본 문제집으로 그냥 해보기</a>
+          {me.email ? <>{me.email} 로 들어와 있습니다 · </> : null}
+          <a className="back" href="/play/demo">
+            기본 문제집으로 그냥 해보기
+          </a>
         </p>
       </div>
     </main>

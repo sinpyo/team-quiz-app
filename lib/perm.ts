@@ -10,8 +10,12 @@ import type { PackRow } from './schema';
 
 export type Role = 'owner' | 'editor' | 'viewer';
 
+/** 문제집 번호 모양인지. 아니면 데이터베이스에 묻기 전에 돌려보냅니다 (엉뚱한 값이면 오류가 나므로) */
+export const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 /** 이 사람이 이 문제집에 대해 무엇인지 */
 export async function roleOf(userId: string | null, packId: string): Promise<Role | null> {
+  if (!isUuid(packId)) return null;
   const rows = await db().select().from(schema.packs).where(eq(schema.packs.id, packId)).limit(1);
   const pack = rows[0];
   if (!pack) return null;

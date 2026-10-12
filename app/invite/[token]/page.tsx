@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm';
 
 import { AcceptInvite } from '@/components/AcceptInvite';
+import { GoogleButton } from '@/components/GoogleButton';
 import { currentUser } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
-import { fakeLoginOn, kakaoReady } from '@/lib/site';
+import { fakeLoginOn, googleReady } from '@/lib/site';
 import '../../ui.css';
 
 export const dynamic = 'force-dynamic';
@@ -77,15 +78,13 @@ export default async function InvitePage({ params }: Props) {
         <div className="face">✏️</div>
         <h1>문제를 같이 만들자는 초대입니다</h1>
         <p>
-          <b>{inv.title}</b> 을(를) 같이 고칠 수 있습니다. 먼저 카카오로 들어와 주세요.
+          <b>{inv.title}</b> 을(를) 같이 고칠 수 있습니다. 먼저 구글 계정으로 들어와 주세요.
         </p>
         <div className="row">
-          {kakaoReady() ? (
-            <a className="btn kakao" href={'/api/auth/kakao?next=' + next}>
-              카카오로 들어가기
-            </a>
+          {googleReady() ? (
+            <GoogleButton next={'/invite/' + token} />
           ) : (
-            <p className="warn">카카오 로그인이 아직 준비되지 않았습니다.</p>
+            <p className="warn">구글 로그인이 아직 준비되지 않았습니다.</p>
           )}
           {fakeLoginOn() ? (
             <a className="btn quiet" href={'/api/auth/dev?who=손님&next=' + next}>

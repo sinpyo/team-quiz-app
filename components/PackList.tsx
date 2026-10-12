@@ -3,13 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-export interface PackRowView {
-  id: string;
-  title: string;
-  viewToken: string;
-  updatedAt: string;
-  mine: boolean;
-}
+import type { LibraryRow } from '@/lib/library';
+import { saveAsTemplate } from './saveAsTemplate';
 
 const when = (iso: string) => {
   const d = new Date(iso);
@@ -21,25 +16,13 @@ const when = (iso: string) => {
   return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.에`;
 };
 
-export function PackList({ packs }: { packs: PackRowView[] }) {
+export function PackList({ packs }: { packs: LibraryRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
 
-  async function make() {
-    setBusy('new');
-    setErr('');
-    const res = await fetch('/api/packs', { method: 'POST' });
-    const out = (await res.json()) as { id?: string; error?: string };
-    if (!res.ok || !out.id) {
-      setErr(out.error || '만들지 못했습니다');
-      setBusy(null);
-      return;
-    }
-    router.push('/edit/' + out.id);
-  }
-
-  async function remove(p: PackRowView) {
+  async function remove(p: LibraryRow) {
     if (!window.confirm(`"${p.title}" 을(를) 지울까요? 되돌릴 수 없습니다.`)) return;
     setBusy(p.id);
     setErr('');
@@ -52,29 +35,29 @@ export function PackList({ packs }: { packs: PackRowView[] }) {
     router.refresh();
   }
 
+  async function toTemplate(p: LibraryRow) {
+    setErr('');
+    setMsg('');
+    setBusy(p.id);
+    const out = await saveAsTemplate(p.id, p.title);
+    setBusy(null);
+    if (out.error) setErr(out.error);
+    if (out.id) {
+      setMsg('템플릿으로 저장했습니다. 위의 템플릿 목록에 들어 있습니다.');
+      router.refresh();
+    }
+  }
+
   return (
     <>
-      <div className="top">
-        <h1>내 문제집</h1>
-        <div className="row">
-          <button type="button" className="btn primary" onClick={make} disabled={busy === 'new'}>
-            {busy === 'new' ? '만드는 중…' : '+ 새 문제집'}
-          </button>
-          <form action="/api/auth/logout" method="post">
-            <button type="submit" className="btn quiet">
-              나가기
-            </button>
-          </form>
-        </div>
-      </div>
-
       {err ? <p className="warn">{err}</p> : null}
+      {msg ? <p className="ok">{msg}</p> : null}
 
       {packs.length === 0 ? (
         <div className="empty">
           아직 만든 문제집이 없습니다.
           <br />
-          <b>+ 새 문제집</b> 을 누르면 기본 문제집(16라운드 127문제)을 복사해서 시작합니다.
+          위에서 <b>템플릿</b>을 하나 골라 시작하세요.
         </div>
       ) : (
         <div className="packs">
@@ -85,7 +68,9 @@ export function PackList({ packs }: { packs: PackRowView[] }) {
                   {p.title}
                   {p.mine ? null : <em>초대받음</em>}
                 </b>
-                <span>{when(p.updatedAt)} 고침</span>
+                <span>
+                  {p.rounds}라운드 · {p.questions}문제 · {when(p.updatedAt)} 고침
+                </span>
               </div>
               <div className="row">
                 <a className="btn sm" href={'/play/' + p.viewToken}>
@@ -95,19 +80,22 @@ export function PackList({ packs }: { packs: PackRowView[] }) {
                   ✏️ 고치기
                 </a>
                 {p.mine ? (
-                  <>
-                    <a className="btn sm" href={'/share/' + p.id}>
-                      🔗 공유
-                    </a>
-                    <button
-                      type="button"
-                      className="btn sm danger quiet"
-                      onClick={() => remove(p)}
-                      disabled={busy === p.id}
-                    >
-                      {busy === p.id ? '…' : '지우기'}
-                    </button>
-                  </>
+                  <a className="btn sm" href={'/share/' + p.id}>
+                    🔗 공유
+                  </a>
+                ) : null}
+                <button type="button" className="btn sm" onClick={() => toTemplate(p)} disabled={busy === p.id}>
+                  📑 템플릿으로 저장
+                </button>
+                {p.mine ? (
+                  <button
+                    type="button"
+                    className="btn sm danger quiet"
+                    onClick={() => remove(p)}
+                    disabled={busy === p.id}
+                  >
+                    {busy === p.id ? '…' : '지우기'}
+                  </button>
                 ) : null}
               </div>
             </div>

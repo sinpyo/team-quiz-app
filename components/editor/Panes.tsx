@@ -1,13 +1,18 @@
 'use client';
 
+import type { PreviewTarget } from '@/lib/previewTarget';
 import type { Pack, Question } from '@/lib/types';
+import type { Zone } from './blocks';
 import { Area, Field, Text } from './Field';
+import { PresetGrid } from './Picker';
+import type { Preset } from './presets';
 import { QuestionCard } from './QuestionCard';
-import type { KindValue } from './paths';
 
 interface Common {
   pack: Pack;
   onSet: (path: string, raw: string) => void;
+  /** 이 칸을 만지면 미리보기가 그 장으로 갑니다 */
+  onFocusTarget: (t: PreviewTarget) => void;
 }
 
 /* ── 표지 · 앞뒤 장 ───────────────────────────────── */
@@ -20,15 +25,19 @@ interface CoverProps extends Common {
   onDelCard: (i: number) => void;
 }
 
-export function CoverPane({ pack, onSet, onAddStep, onDelStep, onHot, onAddCard, onDelCard }: CoverProps) {
+export function CoverPane({ pack, onSet, onFocusTarget, onAddStep, onDelStep, onHot, onAddCard, onDelCard }: CoverProps) {
   const ch = pack.cheer || {};
   const st = pack.stop || {};
   const f = pack.finale || {};
   const noteStyle = { fontStyle: 'normal' as const, textTransform: 'none' as const, letterSpacing: 0 };
+  const watch = (type: 'cover' | 'cheer' | 'stop' | 'finale') => ({
+    onFocusCapture: () => onFocusTarget({ type }),
+    onPointerDown: () => onFocusTarget({ type }),
+  });
 
   return (
     <>
-      <div className="card">
+      <div className="card" {...watch('cover')}>
         <h2>표지</h2>
         <div className="grid two">
           <Field label="제목">
@@ -48,7 +57,7 @@ export function CoverPane({ pack, onSet, onAddStep, onDelStep, onHot, onAddCard,
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" {...watch('cheer')}>
         <h2>
           표지 다음 장 <em style={noteStyle}>— 다 비우면 이 장은 안 나옵니다</em>
         </h2>
@@ -67,7 +76,7 @@ export function CoverPane({ pack, onSet, onAddStep, onDelStep, onHot, onAddCard,
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" {...watch('stop')}>
         <h2>
           규칙 장 <em style={noteStyle}>— 다 비우면 이 장은 안 나옵니다</em>
         </h2>
@@ -113,7 +122,7 @@ export function CoverPane({ pack, onSet, onAddStep, onDelStep, onHot, onAddCard,
         </button>
       </div>
 
-      <div className="card">
+      <div className="card" {...watch('finale')}>
         <h2>마지막 장</h2>
         <div className="grid two">
           <Field label="작은 머리글">
@@ -167,38 +176,38 @@ interface RoundProps extends Common {
   ri: number;
   open: Set<string>;
   onToggleQ: (id: string) => void;
-  onKind: (i: number, v: KindValue) => void;
+  onPut: (path: string, value: unknown) => void;
+  onPatchQ: (i: number, fn: (it: Question) => Question) => void;
   onMoveQ: (i: number, dir: number) => void;
   onDupQ: (i: number) => void;
   onDelQ: (i: number) => void;
-  onAddQ: () => void;
+  /** 마지막 문제와 같은 모양으로 하나 더 */
+  onAddSame: () => void;
+  /** 유형을 골라서 하나 더 — preset 이 없으면 고르는 창을 엽니다 */
+  onAddPreset: (p?: Preset) => void;
   onMoveRound: (dir: number) => void;
   onDelRound: () => void;
+  onFocusQ: (qid: string, zone: Zone) => void;
 }
 
-export function RoundPane({
-  pack,
-  ri,
-  onSet,
-  open,
-  onToggleQ,
-  onKind,
-  onMoveQ,
-  onDupQ,
-  onDelQ,
-  onAddQ,
-  onMoveRound,
-  onDelRound,
-}: RoundProps) {
+export function RoundPane(props: RoundProps) {
+  const { pack, ri, onSet, onFocusTarget, open, onToggleQ, onPut, onPatchQ, onMoveQ, onDupQ, onDelQ } = props;
+  const { onAddSame, onAddPreset, onMoveRound, onDelRound, onFocusQ } = props;
   const r = pack.rounds[ri];
   if (!r) return null;
   const qs: Question[] = r.q || [];
+  const watchRound = {
+    onFocusCapture: () => onFocusTarget({ type: 'round', ri }),
+    onPointerDown: () => onFocusTarget({ type: 'round', ri }),
+  };
 
   return (
     <>
-      <div className="card">
+      <div className="card" {...watchRound}>
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: '.7rem' }}>
-          <h2 style={{ margin: 0 }}>라운드 {ri + 1}</h2>
+          <h2 style={{ margin: 0 }}>
+            라운드 {ri + 1} <em className="kind">{qs.length ? `문제 ${qs.length}개` : '게임 한 장'}</em>
+          </h2>
           <div className="qtools">
             <button className="btn sm" type="button" title="위로" onClick={() => onMoveRound(-1)}>↑</button>
             <button className="btn sm" type="button" title="아래로" onClick={() => onMoveRound(1)}>↓</button>
@@ -236,36 +245,53 @@ export function RoundPane({
             <Text path={`rounds.${ri}.pen`} value={r.pen || ''} onSet={onSet} />
           </Field>
         </div>
-        <p className="hint">
-          문제를 하나도 넣지 않으면 라운드 표지 한 장만 나옵니다 (줄자·그림 잇기처럼 화면이 필요 없는 게임).
-        </p>
-      </div>
-
-      <div className="row" style={{ justifyContent: 'space-between', margin: '0 .2rem .5rem' }}>
-        <h2 style={{ margin: 0 }}>문제 {qs.length}개</h2>
-        <button className="btn sm" type="button" onClick={onAddQ}>
-          + 문제 추가
-        </button>
       </div>
 
       {qs.length ? (
-        qs.map((it, i) => (
-          <QuestionCard
-            key={it.id ?? i}
-            it={it}
-            i={i}
-            ri={ri}
-            open={open.has(it.id ?? String(i))}
-            onToggle={() => onToggleQ(it.id ?? String(i))}
-            onSet={onSet}
-            onKind={onKind}
-            onMove={onMoveQ}
-            onDup={onDupQ}
-            onDel={onDelQ}
-          />
-        ))
+        <>
+          <div className="row" style={{ justifyContent: 'space-between', margin: '0 .2rem .5rem' }}>
+            <h2 style={{ margin: 0 }}>문제 {qs.length}개</h2>
+            <span className="hint" style={{ margin: 0 }}>
+              문제를 누르면 펼쳐집니다
+            </span>
+          </div>
+          {qs.map((it, i) => (
+            <QuestionCard
+              key={it.id ?? i}
+              it={it}
+              i={i}
+              ri={ri}
+              open={open.has(it.id ?? String(i))}
+              onToggle={() => {
+                onToggleQ(it.id ?? String(i));
+                if (it.id) onFocusQ(it.id, 'show');
+              }}
+              onPut={onPut}
+              onPatch={onPatchQ}
+              onMove={onMoveQ}
+              onDup={onDupQ}
+              onDel={onDelQ}
+              onFocusZone={(z) => it.id && onFocusQ(it.id, z)}
+            />
+          ))}
+          <div className="addbar">
+            <button className="btn" type="button" onClick={onAddSame}>
+              + 같은 모양으로 문제 추가
+            </button>
+            <button className="btn" type="button" onClick={() => onAddPreset()}>
+              + 다른 유형으로 추가…
+            </button>
+          </div>
+        </>
       ) : (
-        <p className="empty">아직 문제가 없습니다. 화면이 필요 없는 게임이면 이대로 두세요.</p>
+        <div className="card solo-card">
+          <h2>지금은 &lsquo;게임 한 장&rsquo; 라운드입니다</h2>
+          <p className="hint" style={{ marginTop: 0 }}>
+            위에 적은 이름 · 하는 방법 · 벌칙이 라운드 표지 한 장으로 나오고, 그 화면에서 이긴 팀을 고릅니다.
+            줄자 맞추기처럼 화면이 필요 없는 게임이면 이대로 두세요. 문제 화면이 필요하면 유형을 고르세요.
+          </p>
+          <PresetGrid compact onPick={(p) => onAddPreset(p)} />
+        </div>
       )}
     </>
   );

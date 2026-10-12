@@ -6,11 +6,14 @@ import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } fro
 
 import type { Pack } from './types';
 
+export type PackKind = 'pack' | 'template';
+
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  /** 카카오가 주는 회원번호 */
-  kakaoId: text('kakao_id').notNull().unique(),
+  /** 어디로 들어왔는지까지 붙인 회원번호 — 'google:1234…' 또는 개발용 'dev:이름' */
+  loginId: text('login_id').notNull().unique(),
   name: text('name').notNull(),
+  email: text('email'),
   avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -23,13 +26,15 @@ export const packs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
+    /** 'pack' 은 진행용 문제집, 'template' 은 새 문제집을 찍어내는 틀입니다 */
+    kind: text('kind').$type<PackKind>().notNull().default('pack'),
     data: jsonb('data').$type<Pack>().notNull(),
     /** 보기 링크에 들어가는 값. 짐작으로 맞힐 수 없는 22자입니다 */
     viewToken: text('view_token').notNull().unique(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('packs_owner_idx').on(t.ownerId)],
+  (t) => [index('packs_owner_idx').on(t.ownerId, t.kind)],
 );
 
 /** 이 문제집을 고칠 수 있는 사람들 (주인은 여기 없어도 고칠 수 있습니다) */

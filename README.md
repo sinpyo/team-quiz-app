@@ -3,8 +3,8 @@
 친구들끼리 모여서 하는 팀 대항 퀴즈입니다. 화면에 띄워놓고 키보드로 넘기면 됩니다.
 기본 문제집에 16개 라운드, 127문제가 들어 있습니다.
 
-카카오로 들어와서 **내 문제집**을 만들고, 링크로 나눠주되,
-**보는 사람은 못 고치고 고칠 사람만 따로 초대**합니다.
+구글 계정으로 들어와서 **템플릿을 골라 내 문제집**을 만들고, 블록을 쌓듯 문제를 고칩니다.
+링크로 나눠주되 **보는 사람은 못 고치고 고칠 사람만 따로 초대**합니다.
 
 > 로그인 없이 쓰던 예전 판은 [sinpyo/team-quiz](https://github.com/sinpyo/team-quiz) 에 그대로 있습니다.
 
@@ -14,10 +14,12 @@
 
 | 주소 | 하는 일 | 로그인 |
 |---|---|---|
-| `/` | 내 문제집 목록 (로그인 전에는 소개) | 아니오 |
+| `/` | 템플릿 목록 · 내 문제집 (로그인 전에는 소개) | 아니오 |
+| `/templates/<이름 또는 번호>` | 템플릿에 든 것 확인 → 내 문제집으로 만들기 | 기본 템플릿은 아니오 |
+| `/templates/<이름>/play` | 기본 템플릿을 그대로 진행해 보기 | 아니오 |
 | `/play/demo` | 기본 문제집으로 바로 진행 | 아니오 |
 | `/play/<보기값>` | 나눠받은 문제집으로 진행 · **고치기 없음** | 아니오 |
-| `/edit/<문제집>` | 문제 고치기 | 주인 또는 편집자 |
+| `/edit/<문제집>` | 문제 고치기 (템플릿도 여기서) | 주인 또는 편집자 |
 | `/share/<문제집>` | 보기 링크 · 편집 초대 · 편집자 관리 | 주인만 |
 | `/invite/<초대값>` | 편집 초대 받기 | 필요 |
 
@@ -27,6 +29,49 @@
 
 권한은 전부 서버에서 확인합니다(`lib/perm.ts`). 화면에서 단추를 감추는 것은 보기
 좋으라고 하는 것일 뿐이라, `/edit/<남의문제집>` 을 주소창에 직접 쳐도 막힙니다.
+
+---
+
+## 템플릿
+
+처음부터 세 가지가 들어 있습니다 — **단체 게임 퀴즈**(16라운드 127문제), **준비물 없는 퀴즈**
+(말로만 하는 8라운드), **빈 문제집**. 코드(`lib/templates.ts`)에 있어서 누구에게나 같고 아무도 못 고칩니다.
+
+- 템플릿을 고르면 라운드와 문제 · 정답을 펼쳐 볼 수 있고, `이 템플릿으로 문제집 만들기` 를 누르면
+  **복사본**이 내 문제집으로 생겨 바로 고치는 화면으로 갑니다. 템플릿은 안 바뀝니다
+- 잘 만든 문제집은 `📑 템플릿으로 저장` 으로 **내 템플릿**이 됩니다. 다음 모임에 다시 꺼내 쓰면 됩니다
+- 내 템플릿도 같은 고치기 화면에서 고칩니다
+
+문제집과 템플릿은 같은 표(`packs`)에 들어 있고 `kind` 칸('pack' / 'template')으로 나눕니다.
+그래서 권한 · 저장 · 진행 링크가 둘 다 똑같이 움직입니다.
+
+---
+
+## 문제 만들기
+
+**라운드(큰 문제)** 는 두 가지입니다. `+ 라운드 추가` 를 누르면 고르는 창이 뜹니다.
+
+| | 화면 | 예 |
+|---|---|---|
+| **게임 한 장** | 라운드 표지(이름 · 하는 방법 · 벌칙) 한 장. 그 화면에서 이긴 팀을 고릅니다 | 줄자 cm 맞추기, 양세찬 게임 |
+| **문제가 이어지는 라운드** | 라운드 표지 뒤에 문제 화면이 이어집니다 | 초성 퀴즈, 노래 맞추기 |
+
+**문제(작은 문제)** 는 블록을 쌓아 만듭니다. 처음에 유형을 고르면 블록이 몇 개 깔려 있고,
+그 뒤로는 마음대로 붙이고 뗍니다.
+
+- **유형** — 초성 · 이모티콘 · 기호/글자 · 글 문제 · 보기 고르기 · 노래 · 표로 정답 · 이어 듣기 · 미션 화면 · 빈 문제
+- **문제 화면 블록** — 큰 글자 · 노래(유튜브) · 문제 문장 · 안내 한 줄 · 보기 · 역할 나누기 · 번호 대신 이름표
+- **정답 블록** (→ 를 한 번 더 눌러야 열림) — 정답 · 덧붙임 · 표로 된 정답 · 문제 전문.
+  정답 블록이 없으면 → 한 번에 다음 장으로 넘어갑니다
+- `+ 같은 모양으로 문제 추가` — 마지막 문제와 같은 블록을 빈 채로 깔아 줍니다.
+  🎵 · 안내 한 줄 · 역할처럼 문제마다 똑같이 쓰는 것은 옮겨 적습니다
+
+오른쪽 **미리보기**는 퀴즈 화면을 `/preview` 에 진짜 부품 · 진짜 CSS 로 그린 뒤 줄인 것이라
+진행할 때와 똑같이 보입니다. 정답 쪽 칸을 만지면 정답이 열린 화면으로 바뀝니다.
+
+블록은 따로 '종류' 를 적어 두지 않고 문제 데이터의 칸이 있는지로 정합니다
+(`components/editor/blocks.ts`). 그래서 문제집 모양이 예전 그대로이고, 예전 `.json` 도 그대로 열립니다.
+블록을 넣고 아직 비워 둔 칸은 저장할 때 `sanitizePack()` 이 걸러 냅니다.
 
 ---
 
@@ -61,7 +106,7 @@ npx drizzle-kit migrate        # 표 만들기
 npm run dev                    # http://localhost:3000
 ```
 
-카카오 키가 아직 없다면 `.env.local` 에 `DEV_FAKE_LOGIN=1` 을 넣으세요.
+구글 키가 아직 없다면 `.env.local` 에 `DEV_FAKE_LOGIN=1` 을 넣으세요.
 `/api/auth/dev?who=이름` 으로 로그인한 셈 치고 나머지를 다 써볼 수 있습니다.
 이 길은 **올려둔 곳에서는 아예 없습니다.**
 
@@ -75,12 +120,20 @@ npm run dev                    # http://localhost:3000
 
 ### 처음 한 번 준비할 것
 
-1. **카카오 개발자** — 앱 만들기 → 카카오 로그인 켜기 → 동의항목에 **닉네임·프로필사진**
-   (이메일은 비즈 앱이라야 받을 수 있는데, 이 앱에는 필요 없습니다) →
-   Redirect URI 두 개 등록:
-   `http://localhost:3000/api/auth/callback` · `https://<올린주소>/api/auth/callback`
+1. **Google Cloud 콘솔** — 프로젝트 만들기 → **Google 인증 플랫폼** →
+   브랜딩(앱 이름 · 지원 메일) · 대상은 **외부** →
+   클라이언트 만들기 → **웹 애플리케이션** → 승인된 리디렉션 URI 두 개:
+   `http://localhost:3000/api/auth/callback` · `https://<올린주소>/api/auth/callback` →
+   나온 **클라이언트 ID · 보안 비밀번호**를 `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` 에.
+   이름 · 메일 · 프로필 사진(openid · email · profile)만 받으므로 민감한 권한 심사는 필요 없습니다.
+   게시 상태가 **테스트**이면 테스트 사용자로 등록한 사람만 들어올 수 있으니, 모두 쓰게 하려면 **앱 게시**를 누르세요
 2. **Neon** — 프로젝트를 만들고 연결 문자열을 `DATABASE_URL` 에
 3. **Vercel** — 이 저장소를 연결하고 환경변수 다섯 개를 넣기
+   (`DATABASE_URL` · `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` · `SESSION_SECRET` · `NEXT_PUBLIC_SITE_URL`)
+
+구글 로그인은 `lib/google.ts` 에 직접 썼습니다. state(엉뚱한 곳에서 이어진 로그인 막기) ·
+PKCE(가로챈 code 로 못 쓰게) · nonce(남의 토큰 끼워 넣기 막기)를 쓰고, 구글이 준 id_token 은
+구글 공개 열쇠로 서명을 확인한 뒤에야 믿습니다.
 
 ---
 
@@ -92,18 +145,20 @@ app/
   globals.css             퀴즈 화면 (인쇄 규칙 포함 — 손대지 마세요)
   ui.css                  목록 · 공유 · 초대  (.page 안쪽에만 걸립니다)
   editor.css              문제 고치기        (.ed 안쪽에만 걸립니다)
-  page.tsx                내 문제집 / 소개
+  page.tsx                템플릿 · 내 문제집 / 소개
+  templates/[id] · templates/[id]/play
   play/demo · play/[token] · edit/[packId] · share/[packId] · invite/[token]
-  api/auth/{kakao,callback,logout,dev}
-  api/packs · api/packs/[id] · api/packs/copy
+  preview                 문제 고치기 화면이 iframe 으로 띄우는 한 장짜리 미리보기
+  api/auth/{google,callback,logout,dev}
+  api/packs (만들기: 템플릿에서 · 문제집에서 템플릿으로) · api/packs/[id] · api/packs/copy
   api/packs/[id]/invites · api/packs/[id]/editors/[userId] · api/invites/[token]
 components/
-  deck/                   퀴즈 화면
-  editor/                 문제 고치기
-  PackList · SharePanel · AcceptInvite
+  deck/                   퀴즈 화면 (PreviewStage 는 미리보기용 한 장)
+  editor/                 문제 고치기 — blocks(블록) · presets(유형) · Picker · Preview · QuestionCard
+  TemplateGrid · TemplateActions · PackOutline · PackList · SharePanel · AcceptInvite · GoogleButton
 lib/
-  types · defaultPack · buildSlides · pack · storage · ids
-  db · schema · auth · perm · site
+  types · defaultPack · templates · buildSlides · previewTarget · pack · storage · ids
+  db · schema · auth · google · perm · library · site
 public/art/               앨범 사진 · public/sw.js  인터넷 없이 볼 수 있게 받아두는 일꾼
 drizzle/                  표를 만드는 SQL
 ```

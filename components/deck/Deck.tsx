@@ -313,7 +313,7 @@ export function Deck({ pack, editHref = null, copyFrom = null }: Props) {
       });
       if (res.status === 401) {
         // 로그인하고 돌아오면 바로 이어서 복사합니다
-        window.location.href = '/api/auth/kakao?next=' + encodeURIComponent(window.location.pathname + '?copy=1');
+        window.location.href = '/api/auth/google?next=' + encodeURIComponent(window.location.pathname + '?copy=1');
         return;
       }
       const out = (await res.json()) as { id?: string; error?: string };

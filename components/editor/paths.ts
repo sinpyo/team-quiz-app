@@ -2,11 +2,11 @@
    원래 admin.html 이 쓰던 방식 그대로인데, React 라 원본을 고치지 않고
    새 것을 만들어 돌려줍니다. */
 
-import type { Pack, Question } from '@/lib/types';
-
 type Any = Record<string, unknown> | unknown[];
 
-export function setPath<T>(root: T, path: string, val: unknown): T {
+/** keepEmpty 이면 빈 글자도 그대로 둡니다 — 문제 블록은 비어 있어도 화면에 남아 있어야 해서입니다.
+    빈 값은 저장할 때 서버(sanitizePack)가 걸러 냅니다 */
+export function setPath<T>(root: T, path: string, val: unknown, keepEmpty = false): T {
   const parts = path.split('.');
 
   const walk = (node: unknown, i: number): unknown => {
@@ -18,7 +18,7 @@ export function setPath<T>(root: T, path: string, val: unknown): T {
     const box = base as Record<string, unknown>;
 
     if (isLast) {
-      if (val === '' || val === undefined) delete box[key];
+      if (val === undefined || (val === '' && !keepEmpty)) delete box[key];
       else box[key] = val;
       return base;
     }
@@ -31,76 +31,8 @@ export function setPath<T>(root: T, path: string, val: unknown): T {
   return walk(root, 0) as T;
 }
 
-/** 칸마다 값을 어떻게 읽을지가 다릅니다 (쉼표로 나누는 것, 줄로 나누는 것) */
-export function readField(path: string, raw: string): unknown {
-  const key = path.split('.').pop();
-
-  if (key === 'opts' || key === 'roles') {
-    const arr = raw.split(',').map((v) => v.trim()).filter(Boolean);
-    return arr.length ? arr : '';
-  }
-  if (key === 'list') {
-    const arr = raw
-      .split('\n')
-      .map((line) => {
-        const i = line.indexOf('=');
-        if (i < 0) return null;
-        return [line.slice(0, i).trim(), line.slice(i + 1).trim()] as [string, string];
-      })
-      .filter((p): p is [string, string] => !!p && !!p[0]);
-    return arr.length ? arr : '';
-  }
-  if (key === 'yt') {
-    const m = raw.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/);
-    return m ? m[1] : raw.trim();
-  }
-  return raw;
+/** 유튜브 주소를 붙여 넣으면 11자 번호만 남깁니다 */
+export function parseYt(raw: string): string {
+  const m = raw.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : raw.trim();
 }
-
-/** 문제 종류 — 화면에 필요한 칸만 보여주려고 씁니다 */
-export const KINDS = [
-  { v: 'cho', n: '초성', g: '큰 글자 (초성)', ph: '예: ㄱㅂㅈ' },
-  { v: 'emoji', n: '이모티콘', g: '큰 글자 (이모티콘)', ph: '예: 🐧🎬' },
-  { v: 'sym', n: '기호 · 글자', g: '큰 글자', ph: '예: dB' },
-  { v: 'song', n: '노래', g: null },
-  { v: 'text', n: '글만', g: null },
-] as const;
-
-export type KindValue = (typeof KINDS)[number]['v'];
-
-export const kindOf = (it: Question): KindValue => (it.yt !== undefined ? 'song' : it.k ? it.k : 'text');
-
-/** 종류를 바꾸면 그 종류에 맞게 칸을 정리합니다 */
-export function changeKind(it: Question, v: KindValue): Question {
-  const next: Question = { ...it };
-  if (v === 'song') {
-    next.k = 'emoji';
-    next.g = next.g || '🎵';
-    next.yt = next.yt ?? '';
-    next.roles = next.roles || ['제목', '가수', '한 소절'];
-    next.s = next.s || '전주 재생';
-  } else if (v === 'text') {
-    delete next.k;
-    delete next.g;
-    delete next.yt;
-    delete next.art;
-  } else {
-    next.k = v;
-    delete next.yt;
-    delete next.art;
-    if (next.g === undefined) next.g = '';
-  }
-  return next;
-}
-
-/** 라운드 하나를 새로 만듭니다 */
-export const blankRound = (n: number) => ({
-  id: 'r' + n,
-  t: `${n}번째 라운드`,
-  c: '#9a8db6',
-  how: '',
-  pen: '',
-  q: [] as Question[],
-});
-
-export const emptyPack = (): Pack => ({ ver: 1, rounds: [] });

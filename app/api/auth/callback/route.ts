@@ -1,63 +1,35 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
 import { sessionCookieOptions, signSession, upsertUser } from '@/lib/auth';
-import { kakaoRedirectUri, siteUrl } from '@/lib/site';
+import { LoginError, OAUTH_COOKIE, finishGoogleLogin, unpackPending } from '@/lib/google';
+import { safeNext, siteUrl } from '@/lib/site';
 
-/** 카카오에서 돌아오면 여기로 옵니다. 토큰을 바꿔 받고, 가입시키고, 쿠키를 심습니다 */
-export async function GET(req: Request) {
+/** 구글에서 돌아오면 여기로 옵니다. 토큰을 바꿔 받고, 가입시키고, 쿠키를 심습니다 */
+export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const err = url.searchParams.get('error');
 
-  const back = (why: string) => NextResponse.redirect(siteUrl() + '/?err=' + why);
+  const back = (why: string) => {
+    const res = NextResponse.redirect(siteUrl() + '/?err=' + why);
+    res.cookies.delete(OAUTH_COOKIE);
+    return res;
+  };
 
   if (err || !code) return back(err === 'access_denied' ? 'cancelled' : 'no-code');
 
-  const jar = req.headers.get('cookie') || '';
-  const read = (k: string) => jar.match(new RegExp('(?:^|; )' + k + '=([^;]*)'))?.[1];
-  if (!state || read('quiz_oauth_state') !== state) return back('bad-state');
-  const next = decodeURIComponent(read('quiz_oauth_next') || '/');
+  const pending = unpackPending(req.cookies.get(OAUTH_COOKIE)?.value);
+  if (!pending || !state || pending.state !== state) return back('bad-state');
 
   try {
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: process.env.KAKAO_CLIENT_ID!,
-      client_secret: process.env.KAKAO_CLIENT_SECRET!,
-      redirect_uri: kakaoRedirectUri(),
-      code,
-    });
-    const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
-      body,
-    });
-    if (!tokenRes.ok) return back('token-failed');
-    const token = (await tokenRes.json()) as { access_token?: string };
-    if (!token.access_token) return back('token-failed');
-
-    const meRes = await fetch('https://kapi.kakao.com/v2/user/me', {
-      headers: { Authorization: 'Bearer ' + token.access_token },
-    });
-    if (!meRes.ok) return back('me-failed');
-    const me = (await meRes.json()) as {
-      id?: number | string;
-      kakao_account?: { profile?: { nickname?: string; profile_image_url?: string } };
-      properties?: { nickname?: string; profile_image?: string };
-    };
-    if (me.id === undefined) return back('me-failed');
-
-    const profile = me.kakao_account?.profile;
-    const name = profile?.nickname || me.properties?.nickname || '이름 없음';
-    const avatar = profile?.profile_image_url || me.properties?.profile_image || null;
-
-    const user = await upsertUser(String(me.id), name, avatar);
-    const res = NextResponse.redirect(siteUrl() + (next.startsWith('/') ? next : '/'));
+    const me = await finishGoogleLogin(code, pending);
+    const user = await upsertUser('google:' + me.sub, me.name, me.picture, me.email);
+    const res = NextResponse.redirect(siteUrl() + safeNext(pending.next));
     res.cookies.set({ ...sessionCookieOptions(), value: await signSession(user.id) });
-    res.cookies.delete('quiz_oauth_state');
-    res.cookies.delete('quiz_oauth_next');
+    res.cookies.delete(OAUTH_COOKIE);
     return res;
-  } catch {
-    return back('login-failed');
+  } catch (e) {
+    return back(e instanceof LoginError ? e.why : 'login-failed');
   }
 }

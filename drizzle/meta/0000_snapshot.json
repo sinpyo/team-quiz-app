@@ -1,5 +1,5 @@
 {
-  "id": "7ec8f698-e957-4554-b105-2ebd6799576c",
+  "id": "7a5cb496-0534-4f11-a21a-572258b95f33",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -210,6 +210,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pack'"
+        },
         "data": {
           "name": "data",
           "type": "jsonb",
@@ -243,6 +250,12 @@
           "columns": [
             {
               "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -294,8 +307,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "kakao_id": {
-          "name": "kakao_id",
+        "login_id": {
+          "name": "login_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -305,6 +318,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "avatar_url": {
           "name": "avatar_url",
@@ -324,11 +343,11 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "users_kakao_id_unique": {
-          "name": "users_kakao_id_unique",
+        "users_login_id_unique": {
+          "name": "users_login_id_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "kakao_id"
+            "login_id"
           ]
         }
       },

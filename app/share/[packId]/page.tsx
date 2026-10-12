@@ -5,7 +5,7 @@ import { SharePanel } from '@/components/SharePanel';
 import { currentUserId } from '@/lib/auth';
 import { db, schema } from '@/lib/db';
 import { isOwner } from '@/lib/perm';
-import { siteUrl } from '@/lib/site';
+import { loginHref, siteUrl } from '@/lib/site';
 import '../../ui.css';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ type Props = { params: Promise<{ packId: string }> };
 export default async function SharePage({ params }: Props) {
   const { packId } = await params;
   const me = await currentUserId();
-  if (!me) redirect('/api/auth/kakao?next=' + encodeURIComponent('/share/' + packId));
+  if (!me) redirect(loginHref('/share/' + packId));
   if (!(await isOwner(me, packId))) notFound();
 
   const rows = await db()
