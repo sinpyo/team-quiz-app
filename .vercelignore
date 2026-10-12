@@ -1,0 +1,5 @@
+# 내 컴퓨터 전용 설정은 서버에 올리지 않습니다 — 서버 값은 Vercel 환경변수에 있습니다
+.env*.local
+.env
+node_modules
+.next
