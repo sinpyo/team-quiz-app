@@ -1,4 +1,5 @@
 import { GoogleButton } from '@/components/GoogleButton';
+import { LegalLinks } from '@/components/LegalLinks';
 import { PackList } from '@/components/PackList';
 import { TemplateGrid } from '@/components/TemplateGrid';
 import { currentUser } from '@/lib/auth';
@@ -50,6 +51,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
               <b> 받은 사람은 못 고치고</b>, 고칠 사람만 따로 초대할 수 있습니다.
             </p>
           </div>
+          <LegalLinks />
         </div>
       </main>
     );
@@ -97,6 +99,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
             기본 문제집으로 그냥 해보기
           </a>
         </p>
+        <LegalLinks />
       </div>
     </main>
   );

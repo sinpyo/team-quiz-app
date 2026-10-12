@@ -220,3 +220,15 @@
   .page .outline .qs .ans { grid-column: 2; }
   .page .outline .rbody { padding-left: .95rem; }
 }
+
+/* ── 약관 · 개인정보처리방침 ─────────────────────── */
+.page .doc h1 { margin: 0 0 .3rem; font-size: clamp(1.5rem, 4.4vh, 2rem); font-weight: 800; letter-spacing: -.035em; }
+.page .doc .meta { margin: 0 0 1.6rem; color: var(--mute); font-size: .82rem; }
+.page .doc h2 { margin: 1.6rem 0 .5rem; font-size: 1rem; font-weight: 800; }
+.page .doc p, .page .doc li { color: color-mix(in oklab, var(--paper) 82%, var(--mute)); font-size: .9rem; line-height: 1.8; }
+.page .doc p { margin: 0 0 .6rem; }
+.page .doc ul { margin: 0 0 .6rem; padding-left: 1.2rem; }
+.page .doc a { color: var(--accent); }
+.page .legal { margin-top: 2.4rem; text-align: center; font-size: .78rem; }
+.page .legal a { color: var(--mute); text-decoration: none; }
+.page .legal a:hover { color: var(--paper); text-decoration: underline; }
