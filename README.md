@@ -6,6 +6,8 @@
 구글 계정으로 들어와서 **템플릿을 골라 내 문제집**을 만들고, 블록을 쌓듯 문제를 고칩니다.
 링크로 나눠주되 **보는 사람은 못 고치고 고칠 사람만 따로 초대**합니다.
 
+**올려둔 곳: https://sinpyo-quiz.vercel.app** — `main` 에 올리면 Vercel 이 알아서 다시 배포합니다.
+
 > 로그인 없이 쓰던 예전 판은 [sinpyo/team-quiz](https://github.com/sinpyo/team-quiz) 에 그대로 있습니다.
 
 ---
